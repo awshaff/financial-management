@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+**/dist/
+**/build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+backend/.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Drizzle migrations
+backend/drizzle/
+
+# Test coverage
+coverage/
+
+# Docker volumes (not tracked, created by docker-compose)
+postgres_data/
+
+# Temp files
+*.tmp
+*.temp
+
+# Package lock (optional - remove if you want to track it)
+# package-lock.json
