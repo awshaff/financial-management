@@ -39,19 +39,19 @@ function StatCard({ title, value, subtitle, icon, trend, trendValue, isCurrency 
     return (
         <Card className="bg-card border-border hover:bg-accent/5 transition-colors">
             <CardContent className="p-4 md:p-6">
-                <div className="flex items-start justify-between">
+                <div className="flex flex-col-reverse md:flex-row items-start justify-between gap-4">
                     <div className="space-y-1">
                         <p className="text-sm text-muted-foreground">{title}</p>
-                        <p className="text-2xl font-bold tabular-nums tracking-tight">
+                        <p className="text-xl sm:text-2xl font-bold tabular-nums tracking-tight text-nowrap">
                             {isCurrency ? formatKRW(value) : formatNumber(value)}
                         </p>
                         {subtitle && (
-                            <p className="text-xs text-muted-foreground">{subtitle}</p>
+                            <p className="text-xs text-muted-foreground text-nowrap">{subtitle}</p>
                         )}
                     </div>
                     <div
                         className={cn(
-                            'p-2 rounded-lg',
+                            'p-2 rounded-lg shrink-0 self-start',
                             icon === 'piggybank' && 'bg-success/10 text-success',
                             icon === 'wallet' && 'bg-primary/10 text-primary',
                             icon === 'receipt' && 'bg-warning/10 text-warning',

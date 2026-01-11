@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, subMonths, addMonths } from 'date-fns';
 import { useDashboardSummary, useTrends } from '@/hooks/useDashboard';
 import { StatCards } from '@/components/dashboard/StatCards';
@@ -8,14 +8,7 @@ import { TrendChart } from '@/components/dashboard/TrendChart';
 import { BudgetProgress } from '@/components/dashboard/BudgetProgress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
-import { ExpenseForm } from '@/components/expenses/ExpenseForm';
-import { useQueryClient } from '@tanstack/react-query';
+
 
 // Billing cycle: 27th of previous month to 26th of selected month
 function getBillingCycleDates(selectedMonth: Date) {
@@ -35,8 +28,6 @@ function getBillingCycleDates(selectedMonth: Date) {
 
 export function DashboardPage() {
     const [selectedMonth, setSelectedMonth] = useState(() => new Date());
-    const [isAddOpen, setIsAddOpen] = useState(false);
-    const queryClient = useQueryClient();
 
     const billingCycle = useMemo(() => getBillingCycleDates(selectedMonth), [selectedMonth]);
 
@@ -81,13 +72,7 @@ export function DashboardPage() {
         <div className="space-y-6">
             {/* Header with Month Selector */}
             <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-2xl font-bold">Dashboard</h1>
-                    <Button size="sm" onClick={() => setIsAddOpen(true)}>
-                        <Plus className="w-4 h-4 mr-1.5" />
-                        Add Expense
-                    </Button>
-                </div>
+                <h1 className="text-2xl font-bold">Dashboard</h1>
 
                 {/* Month Selector - Compact */}
                 <div className="flex flex-col items-center gap-0.5">
@@ -137,22 +122,6 @@ export function DashboardPage() {
 
             {/* Trend Chart */}
             <TrendChart data={trends || []} />
-
-            {/* Add Expense Dialog */}
-            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-                <DialogContent className="max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Add Expense</DialogTitle>
-                    </DialogHeader>
-                    <ExpenseForm
-                        onSuccess={() => {
-                            setIsAddOpen(false);
-                            // Refresh dashboard data
-                            queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-                        }}
-                    />
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }
