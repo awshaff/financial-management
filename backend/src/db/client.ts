@@ -1,3 +1,8 @@
+import dotenv from 'dotenv';
+import { expand } from 'dotenv-expand';
+
+expand(dotenv.config());
+
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from './schema.js';
