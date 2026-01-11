@@ -14,27 +14,53 @@ router.use(authMiddleware);
 
 // Validation schemas
 const summaryQuerySchema = z.object({
+    // Legacy month param (uses calendar month)
     month: z
         .string()
         .regex(/^\d{4}-\d{2}$/, 'Invalid month format (YYYY-MM)')
+        .optional(),
+    // Custom date range (overrides month if provided)
+    startDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)')
+        .optional(),
+    endDate: z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)')
         .optional(),
 });
 
 /**
  * GET /api/dashboard/summary
  * Optimized single-query dashboard summary
+ * Supports:
+ *   - ?month=2026-01 (calendar month: Jan 1 - Jan 31)
+ *   - ?startDate=2025-12-27&endDate=2026-01-26 (custom billing cycle)
  */
 router.get('/summary', async (req, res) => {
     try {
         const { userId } = req.user!;
         const query = summaryQuerySchema.parse(req.query);
 
-        // Determine target month
-        const targetDate = query.month
-            ? new Date(query.month + '-01')
-            : new Date();
-        const startDate = format(startOfMonth(targetDate), 'yyyy-MM-dd');
-        const endDate = format(endOfMonth(targetDate), 'yyyy-MM-dd');
+        // Determine date range
+        let startDate: string;
+        let endDate: string;
+        let label: string;
+
+        if (query.startDate && query.endDate) {
+            // Custom date range (for billing cycles like 27th to 26th)
+            startDate = query.startDate;
+            endDate = query.endDate;
+            label = `${query.startDate} to ${query.endDate}`;
+        } else {
+            // Calendar month (legacy)
+            const targetDate = query.month
+                ? new Date(query.month + '-01')
+                : new Date();
+            startDate = format(startOfMonth(targetDate), 'yyyy-MM-dd');
+            endDate = format(endOfMonth(targetDate), 'yyyy-MM-dd');
+            label = format(targetDate, 'yyyy-MM');
+        }
 
         // Get expenses aggregated by category
         const categoryBreakdown = await db
@@ -137,20 +163,23 @@ router.get('/summary', async (req, res) => {
             .orderBy(sql`sum(${expenses.amountNet}) desc`)
             .limit(5);
 
-        // Get income for this month
+        // Get income for this month (use startDate to determine month)
+        const incomeMonthStart = format(startOfMonth(new Date(startDate)), 'yyyy-MM-dd');
         const [monthlyIncome] = await db
             .select({ amount: income.amount })
             .from(income)
             .where(
                 and(
                     eq(income.userId, userId),
-                    eq(income.month, format(startOfMonth(targetDate), 'yyyy-MM-dd'))
+                    eq(income.month, incomeMonthStart)
                 )
             )
             .limit(1);
 
         return res.json({
-            month: format(targetDate, 'yyyy-MM'),
+            period: label,
+            startDate,
+            endDate,
             totalSpent,
             totalCashback,
             totalExpenses,

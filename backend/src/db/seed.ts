@@ -22,7 +22,7 @@ export const defaultPaymentMethods = [
     { name: 'Bank Transfer', type: 'Bank Transfer' as const, cashbackPercentage: null },
     { name: 'Debit Card', type: 'Debit Card' as const, cashbackPercentage: null },
     {
-        name: 'Credit Card (Default)',
+        name: 'Credit Card',
         type: 'Credit Card' as const,
         cashbackPercentage: '1.20',
         isDefault: true,

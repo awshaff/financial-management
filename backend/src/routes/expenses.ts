@@ -366,4 +366,43 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/expenses/bulk-delete
+ * Delete multiple expenses at once
+ */
+const bulkDeleteSchema = z.object({
+    ids: z.array(z.string().uuid()).min(1).max(100),
+});
+
+router.post('/bulk-delete', async (req, res) => {
+    try {
+        const { userId } = req.user!;
+        const { ids } = bulkDeleteSchema.parse(req.body);
+
+        // Delete expenses one by one to ensure proper ownership check
+        // This is safe for up to 100 items (as limited by schema)
+        let deletedCount = 0;
+        for (const id of ids) {
+            const result = await db
+                .delete(expenses)
+                .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
+                .returning({ id: expenses.id });
+            if (result.length > 0) {
+                deletedCount++;
+            }
+        }
+
+        return res.json({ deleted: deletedCount });
+    } catch (error) {
+        if (error instanceof z.ZodError) {
+            return res.status(400).json({
+                error: 'Validation failed',
+                details: error.errors,
+            });
+        }
+        console.error('Bulk delete expenses error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 export default router;

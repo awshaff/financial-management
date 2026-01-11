@@ -122,9 +122,15 @@ router.post('/excel', upload.single('file'), async (req, res) => {
             // Parse date (handle Excel serial numbers and strings)
             let dateStr: string;
             if (typeof row.Date === 'number') {
-                // Excel serial date number
-                const excelDate = XLSX.SSF.parse_date_code(row.Date);
-                dateStr = `${excelDate.y}-${String(excelDate.m).padStart(2, '0')}-${String(excelDate.d).padStart(2, '0')}`;
+                // Excel serial date number - convert manually
+                // Excel dates start from 1900-01-01 (serial 1)
+                // But Excel has a bug where it thinks 1900 was a leap year, so we adjust
+                const excelEpoch = new Date(1899, 11, 30); // Dec 30, 1899
+                const date = new Date(excelEpoch.getTime() + row.Date * 24 * 60 * 60 * 1000);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                dateStr = `${year}-${month}-${day}`;
             } else {
                 // String date - try to parse
                 const parsed = new Date(row.Date);
@@ -135,14 +141,22 @@ router.post('/excel', upload.single('file'), async (req, res) => {
                 dateStr = parsed.toISOString().split('T')[0];
             }
 
-            // Lookup category
-            const category = catMap.get(row.Category.toLowerCase());
+            // Lookup category - auto-create if not found
+            let category = catMap.get(row.Category.toLowerCase());
             if (!category) {
-                errors.push({
-                    row: rowNumber,
-                    reason: `Category not found: ${row.Category}`,
-                });
-                continue;
+                // Auto-create the category
+                const [newCategory] = await db
+                    .insert(categories)
+                    .values({
+                        userId,
+                        name: row.Category.trim(),
+                        isDefault: false,
+                        monthlyBudget: null,
+                    })
+                    .returning();
+                category = newCategory;
+                // Add to map for future rows
+                catMap.set(row.Category.toLowerCase(), newCategory);
             }
 
             // Lookup payment method
@@ -162,24 +176,15 @@ router.post('/excel', upload.single('file'), async (req, res) => {
                 continue;
             }
 
-            // Calculate cashback (server-side)
-            let cashbackAmount = 0;
-            if (
-                paymentMethod.type === 'Credit Card' &&
-                paymentMethod.cashbackPercentage
-            ) {
-                cashbackAmount = Math.round(
-                    amount * (Number(paymentMethod.cashbackPercentage) / 100)
-                );
-            }
-
+            // Excel imports from credit card bills already have discounted amounts
+            // So we don't calculate cashback - amount IS the net amount
             toInsert.push({
                 userId,
                 date: dateStr,
                 merchant: String(row.Merchant).trim(),
                 amount,
-                cashbackAmount,
-                amountNet: amount - cashbackAmount,
+                cashbackAmount: 0,
+                amountNet: amount,
                 categoryId: category.id,
                 paymentMethodId: paymentMethod.id,
             });
