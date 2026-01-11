@@ -1,20 +1,17 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:15-alpine
     container_name: finance_tracker_db
-    restart: unless-stopped
-    ports:
-      - "5432:5432"
     environment:
-      POSTGRES_DB: finance_tracker
-      POSTGRES_USER: finance_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword123}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U finance_user -d finance_tracker"]
+      test: [ "CMD-SHELL", "pg_isready -U finance_user -d finance_tracker" ]
       interval: 10s
       timeout: 5s
       retries: 5
