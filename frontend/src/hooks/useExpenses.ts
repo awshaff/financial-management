@@ -18,6 +18,8 @@ export function useExpenses(filters: ExpenseFilters = {}) {
             paymentMethodId: filters.paymentMethodId,
             startDate: filters.startDate,
             endDate: filters.endDate,
+            sortBy: filters.sortBy,
+            sortOrder: filters.sortOrder,
             page: filters.page,
             limit: filters.limit,
         }),

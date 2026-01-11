@@ -62,6 +62,8 @@ export interface ExpenseFilters {
     paymentMethodId?: string;
     startDate?: string;
     endDate?: string;
+    sortBy?: 'date' | 'merchant' | 'category' | 'payment' | 'amount';
+    sortOrder?: 'asc' | 'desc';
     page?: number;
     limit?: number;
 }

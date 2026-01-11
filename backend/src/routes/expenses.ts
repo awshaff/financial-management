@@ -33,6 +33,8 @@ const querySchema = z.object({
     paymentMethodId: z.string().uuid().optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    sortBy: z.enum(['date', 'merchant', 'category', 'payment', 'amount']).default('date'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -64,6 +66,37 @@ router.get('/', async (req, res) => {
 
         const whereClause = and(...conditions);
 
+        // Build ORDER BY clause
+        let orderByClause;
+        switch (query.sortBy) {
+            case 'merchant':
+                orderByClause = query.sortOrder === 'asc'
+                    ? [sql`${expenses.merchant} ASC`, desc(expenses.createdAt)]
+                    : [sql`${expenses.merchant} DESC`, desc(expenses.createdAt)];
+                break;
+            case 'category':
+                orderByClause = query.sortOrder === 'asc'
+                    ? [sql`${categories.name} ASC NULLS LAST`, desc(expenses.createdAt)]
+                    : [sql`${categories.name} DESC NULLS LAST`, desc(expenses.createdAt)];
+                break;
+            case 'payment':
+                orderByClause = query.sortOrder === 'asc'
+                    ? [sql`${paymentMethods.name} ASC NULLS LAST`, desc(expenses.createdAt)]
+                    : [sql`${paymentMethods.name} DESC NULLS LAST`, desc(expenses.createdAt)];
+                break;
+            case 'amount':
+                orderByClause = query.sortOrder === 'asc'
+                    ? [sql`${expenses.amount} ASC`, desc(expenses.createdAt)]
+                    : [sql`${expenses.amount} DESC`, desc(expenses.createdAt)];
+                break;
+            case 'date':
+            default:
+                orderByClause = query.sortOrder === 'asc'
+                    ? [sql`${expenses.date} ASC`, desc(expenses.createdAt)]
+                    : [desc(expenses.date), desc(expenses.createdAt)];
+                break;
+        }
+
         // Query with JOINs (NO N+1!)
         const offset = (query.page - 1) * query.limit;
 
@@ -77,7 +110,7 @@ router.get('/', async (req, res) => {
             .leftJoin(categories, eq(expenses.categoryId, categories.id))
             .leftJoin(paymentMethods, eq(expenses.paymentMethodId, paymentMethods.id))
             .where(whereClause)
-            .orderBy(desc(expenses.date), desc(expenses.createdAt))
+            .orderBy(...orderByClause)
             .limit(query.limit)
             .offset(offset);
 

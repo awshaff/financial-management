@@ -25,9 +25,16 @@ export function ExpensesPage() {
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [filters, setFilters] = useState<ExpenseFilters>({});
     const [showFilters, setShowFilters] = useState(false);
+    const [sortBy, setSortBy] = useState<string>('date');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
     const { data: categories } = useCategories();
     const { data: paymentMethods } = usePaymentMethods();
+
+    const handleSortChange = (column: string, order: 'asc' | 'desc') => {
+        setSortBy(column);
+        setSortOrder(order);
+    };
 
     return (
         <div className="space-y-4">
@@ -136,7 +143,12 @@ export function ExpensesPage() {
             )}
 
             {/* Expense List */}
-            <ExpenseList filters={filters} />
+            <ExpenseList
+                filters={filters}
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSortChange={handleSortChange}
+            />
 
             {/* Add Expense Dialog */}
             <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>

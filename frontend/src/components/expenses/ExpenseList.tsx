@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { Trash2, Pencil, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, Pencil, CreditCard, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,16 +40,48 @@ function formatDate(dateStr: string): string {
 
 interface ExpenseListProps {
     filters?: ExpenseFilters;
+    onSortChange?: (sortBy: string, sortOrder: 'asc' | 'desc') => void;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
 }
 
-export function ExpenseList({ filters = {} }: ExpenseListProps) {
+export function ExpenseList({ filters = {}, onSortChange, sortBy = 'date', sortOrder = 'desc' }: ExpenseListProps) {
     const [page, setPage] = useState(1);
     const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const queryClient = useQueryClient();
 
-    const { data, isLoading, error } = useExpenses({ ...filters, page, limit: 50 });
+    // Include sort in the query
+    const { data, isLoading, error } = useExpenses({ ...filters, sortBy: sortBy as ExpenseFilters['sortBy'], sortOrder, page, limit: 50 });
     const deleteExpense = useDeleteExpense();
+
+    const handleSort = (column: string) => {
+        if (onSortChange) {
+            if (sortBy === column) {
+                // Toggle order
+                onSortChange(column, sortOrder === 'asc' ? 'desc' : 'asc');
+            } else {
+                // New column, default to desc
+                onSortChange(column, 'desc');
+            }
+        }
+    };
+
+    const SortableHeader = ({ column, label, className }: { column: string; label: string; className?: string }) => (
+        <TableHead
+            className={`cursor-pointer hover:bg-accent/50 select-none ${className || ''}`}
+            onClick={() => handleSort(column)}
+        >
+            <div className="flex items-center gap-1">
+                {label}
+                {sortBy === column ? (
+                    sortOrder === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+                ) : (
+                    <ArrowUpDown className="w-3 h-3 opacity-30" />
+                )}
+            </div>
+        </TableHead>
+    );
 
     const bulkDeleteMutation = useMutation({
         mutationFn: (ids: string[]) => api.expenses.bulkDelete(ids),
@@ -177,11 +209,11 @@ export function ExpenseList({ filters = {} }: ExpenseListProps) {
                                         aria-label="Select all"
                                     />
                                 </TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Merchant</TableHead>
-                                <TableHead>Category</TableHead>
-                                <TableHead>Payment</TableHead>
-                                <TableHead className="text-right">Amount</TableHead>
+                                <SortableHeader column="date" label="Date" />
+                                <SortableHeader column="merchant" label="Merchant" />
+                                <SortableHeader column="category" label="Category" />
+                                <SortableHeader column="payment" label="Payment" />
+                                <SortableHeader column="amount" label="Amount" className="text-right" />
                                 <TableHead className="text-right">Cashback</TableHead>
                                 <TableHead className="text-right">Net</TableHead>
                                 <TableHead className="w-24"></TableHead>
