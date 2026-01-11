@@ -1,8 +1,11 @@
+import { useState, useMemo } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, subMonths, addMonths } from 'date-fns';
 import { useDashboardSummary } from '@/hooks/useDashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 
 function formatKRW(value: number): string {
     return new Intl.NumberFormat('ko-KR', {
@@ -12,9 +15,42 @@ function formatKRW(value: number): string {
     }).format(value);
 }
 
+// Billing cycle: 27th of previous month to 26th of selected month
+function getBillingCycleDates(selectedMonth: Date) {
+    const year = selectedMonth.getFullYear();
+    const month = selectedMonth.getMonth(); // 0-indexed
+
+    // Start: 27th of previous month
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevYear = month === 0 ? year - 1 : year;
+    const startDate = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-27`;
+
+    // End: 26th of selected month
+    const endDate = `${year}-${String(month + 1).padStart(2, '0')}-26`;
+
+    return { startDate, endDate };
+}
+
 export function BudgetPage() {
-    const currentMonth = format(new Date(), 'yyyy-MM');
-    const { data: summary, isLoading } = useDashboardSummary(currentMonth);
+    const [selectedMonth, setSelectedMonth] = useState(() => new Date());
+
+    const billingCycle = useMemo(() => getBillingCycleDates(selectedMonth), [selectedMonth]);
+
+    const { data: summary, isLoading } = useDashboardSummary(billingCycle);
+
+    const handlePrevMonth = () => {
+        setSelectedMonth(prev => subMonths(prev, 1));
+    };
+
+    const handleNextMonth = () => {
+        setSelectedMonth(prev => addMonths(prev, 1));
+    };
+
+    const isCurrentMonth = useMemo(() => {
+        const now = new Date();
+        return selectedMonth.getMonth() === now.getMonth() &&
+            selectedMonth.getFullYear() === now.getFullYear();
+    }, [selectedMonth]);
 
     if (isLoading) {
         return (
@@ -32,11 +68,40 @@ export function BudgetPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            {/* Header with Month Selector */}
+            <div className="flex items-center justify-between flex-wrap gap-4">
                 <h1 className="text-2xl font-bold">Budget</h1>
-                <span className="text-sm text-muted-foreground">
-                    {format(new Date(), 'MMMM yyyy')}
-                </span>
+
+                {/* Month Selector - Compact */}
+                <div className="flex flex-col items-center gap-0.5">
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={handlePrevMonth}
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </Button>
+
+                        <span className="font-medium text-sm min-w-[100px] text-center">
+                            {format(selectedMonth, 'MMMM yyyy')}
+                        </span>
+
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={handleNextMonth}
+                            disabled={isCurrentMonth}
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </Button>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">
+                        {billingCycle.startDate} → {billingCycle.endDate}
+                    </span>
+                </div>
             </div>
 
             {/* Overall Budget Summary */}
