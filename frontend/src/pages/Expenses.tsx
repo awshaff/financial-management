@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,9 +23,19 @@ import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import type { ExpenseFilters } from '@/types';
 
 export function ExpensesPage() {
+    const [searchParams] = useSearchParams();
     const [isAddOpen, setIsAddOpen] = useState(false);
-    const [filters, setFilters] = useState<ExpenseFilters>({});
-    const [showFilters, setShowFilters] = useState(false);
+
+    const [filters, setFilters] = useState<ExpenseFilters>(() => ({
+        categoryId: searchParams.get('categoryId') || undefined,
+        startDate: searchParams.get('startDate') || undefined,
+        endDate: searchParams.get('endDate') || undefined,
+    }));
+
+    // Show filters panel if there are active filters
+    const [showFilters, setShowFilters] = useState(() => {
+        return !!(searchParams.get('categoryId') || searchParams.get('startDate') || searchParams.get('endDate'));
+    });
     const [sortBy, setSortBy] = useState<string>('date');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 

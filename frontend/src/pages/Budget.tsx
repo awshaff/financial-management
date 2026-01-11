@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, subMonths, addMonths } from 'date-fns';
 import { useDashboardSummary } from '@/hooks/useDashboard';
@@ -32,6 +33,7 @@ function getBillingCycleDates(selectedMonth: Date) {
 }
 
 export function BudgetPage() {
+    const navigate = useNavigate();
     const [selectedMonth, setSelectedMonth] = useState(() => new Date());
 
     const billingCycle = useMemo(() => getBillingCycleDates(selectedMonth), [selectedMonth]);
@@ -156,7 +158,18 @@ export function BudgetPage() {
                     </Card>
                 ) : (
                     budgetStatus.map((item) => (
-                        <Card key={item.categoryId} className="bg-card border-border">
+                        <Card
+                            key={item.categoryId}
+                            className="bg-card border-border cursor-pointer hover:bg-accent/50 transition-colors"
+                            onClick={() => {
+                                const params = new URLSearchParams({
+                                    categoryId: item.categoryId,
+                                    startDate: billingCycle.startDate,
+                                    endDate: billingCycle.endDate,
+                                });
+                                navigate(`/expenses?${params.toString()}`);
+                            }}
+                        >
                             <CardContent className="p-4 space-y-3">
                                 <div className="flex items-center justify-between">
                                     <span className="font-medium">{item.categoryName}</span>
