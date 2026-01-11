@@ -45,3 +45,7 @@ postgres_data/
 
 # Package lock (optional - remove if you want to track it)
 # package-lock.json
+
+# Documentation
+family-finance-tracker-fsd-v1-self-hosted-cashback.md
+family-finance-tracker-tsd-v4-final-comprehensive.md
