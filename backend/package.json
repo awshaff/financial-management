@@ -1,7 +1,7 @@
 {
-  "name": "family-finance-tracker-api",
+  "name": "finance-tracker-api",
   "version": "1.0.0",
-  "description": "Family Finance Tracker Backend API",
+  "description": "Finance Tracker Backend API",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
