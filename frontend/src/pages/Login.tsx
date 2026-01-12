@@ -46,7 +46,7 @@ export function LoginPage() {
             <Card className="w-full max-w-md bg-card border-border">
                 <CardHeader className="text-center">
                     <div className="text-4xl mb-4">💰</div>
-                    <CardTitle className="text-2xl font-bold">Family Finance Tracker</CardTitle>
+                    <CardTitle className="text-2xl font-bold">Finance Tracker</CardTitle>
                     <CardDescription>Sign in to manage your finances</CardDescription>
                 </CardHeader>
                 <CardContent>

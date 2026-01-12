@@ -80,7 +80,7 @@ export function RegisterPage() {
                 <CardHeader className="text-center">
                     <div className="text-4xl mb-4">💰</div>
                     <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
-                    <CardDescription>Sign up for Family Finance Tracker</CardDescription>
+                    <CardDescription>Sign up for Finance Tracker</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

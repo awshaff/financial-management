@@ -23,6 +23,14 @@ import {
 } from '@/hooks/useCategories';
 import type { Category } from '@/types';
 import { toast } from 'sonner';
+import { useSettings, useUpdateSettings } from '@/hooks/useSettings';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 const categorySchema = z.object({
     name: z.string().min(1, 'Name is required').max(30),
@@ -117,10 +125,27 @@ function CategoryForm({ category, onSuccess, onCancel }: CategoryFormProps) {
 }
 
 export function SettingsPage() {
-    const { data: categories, isLoading } = useCategories();
+    const { data: categories, isLoading: categoriesLoading } = useCategories();
+    const { data: settings, isLoading: settingsLoading } = useSettings();
+    const updateSettingsMutation = useUpdateSettings();
     const deleteCategory = useDeleteCategory();
     const [isAddOpen, setIsAddOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+
+    const billingCycleStartDay = settings?.billingCycleStartDay ?? 27;
+    const billingCycleEndDay = settings?.billingCycleEndDay ?? 26;
+
+    const handleBillingCycleStartChange = (value: string) => {
+        const day = parseInt(value, 10);
+        updateSettingsMutation.mutate({ billingCycleStartDay: day });
+        toast.success(`Billing cycle start updated to day ${day}`);
+    };
+
+    const handleBillingCycleEndChange = (value: string) => {
+        const day = parseInt(value, 10);
+        updateSettingsMutation.mutate({ billingCycleEndDay: day });
+        toast.success(`Billing cycle end updated to day ${day}`);
+    };
 
     const handleDelete = async (id: string) => {
         try {
@@ -131,7 +156,7 @@ export function SettingsPage() {
         }
     };
 
-    if (isLoading) {
+    if (categoriesLoading || settingsLoading) {
         return (
             <div className="flex items-center justify-center h-64">
                 <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -142,6 +167,60 @@ export function SettingsPage() {
     return (
         <div className="space-y-6">
             <h1 className="text-2xl font-bold">Settings</h1>
+
+            {/* Billing Cycle Section */}
+            <Card className="bg-card border-border">
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-base font-semibold">Billing Cycle</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        {billingCycleStartDay > billingCycleEndDay || billingCycleEndDay === 0
+                            ? `Cross-month cycle: Day ${billingCycleStartDay} (prev month) → Day ${billingCycleEndDay === 0 ? 'End' : billingCycleEndDay} (this month)`
+                            : `Same-month cycle: Day ${billingCycleStartDay} → Day ${billingCycleEndDay === 0 ? 'End' : billingCycleEndDay}`
+                        }
+                    </p>
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <Label className="text-sm">Start Day</Label>
+                            <Select
+                                value={billingCycleStartDay.toString()}
+                                onValueChange={handleBillingCycleStartChange}
+                            >
+                                <SelectTrigger className="w-20">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                                        <SelectItem key={day} value={day.toString()}>
+                                            {day}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Label className="text-sm">End Day</Label>
+                            <Select
+                                value={billingCycleEndDay.toString()}
+                                onValueChange={handleBillingCycleEndChange}
+                            >
+                                <SelectTrigger className="w-28">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="0">End of month</SelectItem>
+                                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                                        <SelectItem key={day} value={day.toString()}>
+                                            {day}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Categories Section */}
             <Card className="bg-card border-border">

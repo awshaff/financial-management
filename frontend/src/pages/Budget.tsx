@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useSettings } from '@/hooks/useSettings';
+import { getBillingCycleDates } from '@/lib/settings';
 
 function formatKRW(value: number): string {
     return new Intl.NumberFormat('ko-KR', {
@@ -16,27 +18,19 @@ function formatKRW(value: number): string {
     }).format(value);
 }
 
-// Billing cycle: 27th of previous month to 26th of selected month
-function getBillingCycleDates(selectedMonth: Date) {
-    const year = selectedMonth.getFullYear();
-    const month = selectedMonth.getMonth(); // 0-indexed
-
-    // Start: 27th of previous month
-    const prevMonth = month === 0 ? 11 : month - 1;
-    const prevYear = month === 0 ? year - 1 : year;
-    const startDate = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-27`;
-
-    // End: 26th of selected month
-    const endDate = `${year}-${String(month + 1).padStart(2, '0')}-26`;
-
-    return { startDate, endDate };
-}
-
 export function BudgetPage() {
     const navigate = useNavigate();
     const [selectedMonth, setSelectedMonth] = useState(() => new Date());
+    const { data: settings } = useSettings();
 
-    const billingCycle = useMemo(() => getBillingCycleDates(selectedMonth), [selectedMonth]);
+    const billingCycle = useMemo(
+        () => getBillingCycleDates(
+            selectedMonth,
+            settings?.billingCycleStartDay ?? 27,
+            settings?.billingCycleEndDay ?? 26
+        ),
+        [selectedMonth, settings?.billingCycleStartDay, settings?.billingCycleEndDay]
+    );
 
     const { data: summary, isLoading } = useDashboardSummary(billingCycle);
 

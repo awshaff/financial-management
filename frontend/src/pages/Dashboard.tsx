@@ -8,28 +8,21 @@ import { TrendChart } from '@/components/dashboard/TrendChart';
 import { BudgetProgress } from '@/components/dashboard/BudgetProgress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-
-
-// Billing cycle: 27th of previous month to 26th of selected month
-function getBillingCycleDates(selectedMonth: Date) {
-    const year = selectedMonth.getFullYear();
-    const month = selectedMonth.getMonth(); // 0-indexed
-
-    // Start: 27th of previous month
-    const prevMonth = month === 0 ? 11 : month - 1;
-    const prevYear = month === 0 ? year - 1 : year;
-    const startDate = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-27`;
-
-    // End: 26th of selected month
-    const endDate = `${year}-${String(month + 1).padStart(2, '0')}-26`;
-
-    return { startDate, endDate };
-}
+import { useSettings } from '@/hooks/useSettings';
+import { getBillingCycleDates } from '@/lib/settings';
 
 export function DashboardPage() {
     const [selectedMonth, setSelectedMonth] = useState(() => new Date());
+    const { data: settings } = useSettings();
 
-    const billingCycle = useMemo(() => getBillingCycleDates(selectedMonth), [selectedMonth]);
+    const billingCycle = useMemo(
+        () => getBillingCycleDates(
+            selectedMonth,
+            settings?.billingCycleStartDay ?? 27,
+            settings?.billingCycleEndDay ?? 26
+        ),
+        [selectedMonth, settings?.billingCycleStartDay, settings?.billingCycleEndDay]
+    );
 
     const { data: summary, isLoading: summaryLoading } = useDashboardSummary(billingCycle);
     const { data: trends, isLoading: trendsLoading } = useTrends();

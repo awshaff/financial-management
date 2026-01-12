@@ -15,6 +15,7 @@ import paymentMethodsRoutes from './routes/payment-methods.js';
 import dashboardRoutes from './routes/dashboard.js';
 import importRoutes from './routes/import.js';
 import incomeRoutes from './routes/income.js';
+import settingsRoutes from './routes/settings.js';
 
 // Create Express app
 const app = express();
@@ -83,6 +84,7 @@ app.use('/api/payment-methods', paymentMethodsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/income', incomeRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ============================================
 // 404 Handler
@@ -117,7 +119,7 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 app.listen(PORT, () => {
     console.log(`
 ╔════════════════════════════════════════════════════╗
-║    Family Finance Tracker API                       ║
+║              Finance Tracker API                   ║
 ╠════════════════════════════════════════════════════╣
 ║  Status:    Running                                 ║
 ║  Port:      ${PORT.toString().padEnd(41)}║

@@ -1,4 +1,4 @@
-// API client for the Family Finance Tracker
+// API client for the Finance Tracker
 
 const API_BASE = '/api';
 
@@ -165,6 +165,18 @@ export const dashboard = {
         request<{ months: import('@/types').MonthlyTrend[] }>('/trends/monthly'),
 };
 
+// Settings API
+const settings = {
+    get: () =>
+        request<{ billingCycleStartDay: number; billingCycleEndDay: number }>('/settings'),
+
+    update: (data: { billingCycleStartDay?: number; billingCycleEndDay?: number }) =>
+        request<{ billingCycleStartDay: number; billingCycleEndDay: number }>('/settings', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+};
+
 // Export default api object
 export const api = {
     auth,
@@ -172,4 +184,5 @@ export const api = {
     categories,
     paymentMethods,
     dashboard,
+    settings,
 };

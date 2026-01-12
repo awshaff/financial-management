@@ -84,7 +84,7 @@ export function Sidebar() {
             <div className="p-4 border-t border-border">
                 {!isCollapsed && (
                     <p className="text-xs text-muted-foreground text-center">
-                        Family Finance Tracker v0.1
+                        Finance Tracker v0.1
                     </p>
                 )}
             </div>

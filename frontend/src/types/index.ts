@@ -1,4 +1,4 @@
-// Type definitions for the Family Finance Tracker
+// Type definitions for the Finance Tracker
 
 export type PaymentType = 'Cash' | 'Credit Card' | 'Debit Card' | 'Bank Transfer';
 

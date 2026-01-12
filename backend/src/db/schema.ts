@@ -43,11 +43,12 @@ export const users = pgTable(
     })
 );
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
     paymentMethods: many(paymentMethods),
     categories: many(categories),
     expenses: many(expenses),
     income: many(income),
+    settings: one(userSettings),
 }));
 
 // ============================================
@@ -250,6 +251,47 @@ export const incomeRelations = relations(income, ({ one }) => ({
 }));
 
 // ============================================
+// User Settings Table
+// ============================================
+
+export const userSettings = pgTable(
+    'user_settings',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        userId: uuid('user_id')
+            .references(() => users.id, { onDelete: 'cascade' })
+            .unique()
+            .notNull(),
+        // Billing cycle start day (1-31), default 27
+        billingCycleStartDay: integer('billing_cycle_start_day').default(27).notNull(),
+        // Billing cycle end day (1-31), default 26
+        billingCycleEndDay: integer('billing_cycle_end_day').default(26).notNull(),
+        createdAt: timestamp('created_at').defaultNow().notNull(),
+        updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    },
+    (table) => ({
+        userIdx: index('idx_user_settings_user').on(table.userId),
+        // CHECK: billing_cycle_start_day must be between 1 and 31
+        billingCycleStartCheck: check(
+            'billing_cycle_start_check',
+            sql`${table.billingCycleStartDay} >= 1 AND ${table.billingCycleStartDay} <= 31`
+        ),
+        // CHECK: billing_cycle_end_day must be between 1 and 31
+        billingCycleEndCheck: check(
+            'billing_cycle_end_check',
+            sql`${table.billingCycleEndDay} >= 1 AND ${table.billingCycleEndDay} <= 31`
+        ),
+    })
+);
+
+export const userSettingsRelations = relations(userSettings, ({ one }) => ({
+    user: one(users, {
+        fields: [userSettings.userId],
+        references: [users.id],
+    }),
+}));
+
+// ============================================
 // Type Exports
 // ============================================
 
@@ -267,3 +309,6 @@ export type NewExpense = typeof expenses.$inferInsert;
 
 export type Income = typeof income.$inferSelect;
 export type NewIncome = typeof income.$inferInsert;
+
+export type UserSettings = typeof userSettings.$inferSelect;
+export type NewUserSettings = typeof userSettings.$inferInsert;
