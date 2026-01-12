@@ -1,0 +1,67 @@
+services:
+  # Database: PostgreSQL for persistent data storage
+  postgres:
+    image: postgres:15-alpine
+    container_name: finance_tracker_db
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      # Using a bind mount for easier migrations and manual backups
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      # Ensures the database is ready before the backend attempts to connect
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend: Node.js/Python/Go API service
+  backend:
+    build: ./backend
+    container_name: finance_tracker_backend
+    restart: always
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS}
+    # No port mapping needed here if accessed via the Reverse Proxy
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Frontend: React/Vue/Next.js client-side application
+  frontend:
+    build: ./frontend
+    container_name: finance_tracker_frontend
+    restart: always
+    # Served internally to the gateway
+    depends_on:
+      - backend
+
+  # Gateway: Reverse Proxy (Caddy) to handle HTTPS and Domain Routing
+  gateway:
+    image: caddy:latest
+    container_name: finance_tracker_gateway
+    restart: always
+    ports:
+      - "80:80" # HTTP
+      - "443:443" # HTTPS (Essential for VPS)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
+# Named volumes for Caddy's internal data (certificates, etc.)
+volumes:
+  caddy_data:
+  caddy_config:
