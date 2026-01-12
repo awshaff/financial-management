@@ -155,8 +155,8 @@ async function seedDemo() {
         const categoryMap = new Map(createdCategories.map((c) => [c.name, c]));
         const pmMap = new Map(createdPaymentMethods.map((pm) => [pm.name, pm]));
 
-        // Generate ~150 expenses over 90 days
-        for (let day = 0; day < 90; day++) {
+        // Generate ~350 expenses over 180 days (6 months)
+        for (let day = 0; day < 180; day++) {
             // 1-3 expenses per day
             const expensesPerDay = Math.floor(Math.random() * 3) + 1;
 
@@ -237,18 +237,26 @@ async function seedDemo() {
         await db.insert(expenses).values(expenseData);
         console.log(`   ✓ Created ${expenseData.length} expenses`);
 
-        // Create income records for past 3 months
+        // Create income records for past 6 months (to match trends chart)
         console.log('💵 Creating income records...');
+        const incomeSources = [
+            { amount: 3500000, source: 'Salary' },
+            { amount: 3500000, source: 'Salary' },
+            { amount: 3700000, source: 'Salary + Bonus' },
+            { amount: 3500000, source: 'Salary' },
+            { amount: 3500000, source: 'Salary' },
+            { amount: 4000000, source: 'Salary + Freelance' },
+        ];
         const incomeData = [];
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 6; i++) {
             const date = new Date();
             date.setMonth(date.getMonth() - i);
             date.setDate(1);
             incomeData.push({
                 userId: demoUser.id,
                 month: date.toISOString().split('T')[0],
-                amount: 3500000, // ₩3,500,000
-                source: 'Salary',
+                amount: incomeSources[i].amount,
+                source: incomeSources[i].source,
             });
         }
         await db.insert(income).values(incomeData);

@@ -111,6 +111,8 @@ export interface MonthlyTrend {
     month: string;
     totalSpent: number;
     totalCashback: number;
+    income: number;
+    transactionCount: number;
 }
 
 export interface CreatePaymentMethodInput {

@@ -11,6 +11,7 @@ import { BudgetPage } from '@/pages/Budget';
 import { SettingsPage } from '@/pages/Settings';
 import { TrendsPage } from '@/pages/Trends';
 import { AddExpensePage } from '@/pages/AddExpense';
+import { IncomePage } from '@/pages/Income';
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/payment-methods" element={<PaymentMethodsPage />} />
             <Route path="/budget" element={<BudgetPage />} />
             <Route path="/trends" element={<TrendsPage />} />
+            <Route path="/income" element={<IncomePage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 

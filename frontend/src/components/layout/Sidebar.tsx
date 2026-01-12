@@ -8,6 +8,7 @@ import {
     ChevronLeft,
     ChevronRight,
     TrendingUp,
+    Wallet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { useState } from 'react';
 const navItems = [
     { label: 'Dashboard', icon: Home, path: '/' },
     { label: 'Expenses', icon: Receipt, path: '/expenses' },
+    { label: 'Income', icon: Wallet, path: '/income' },
     { label: 'Budget', icon: PiggyBank, path: '/budget' },
     { label: 'Trends', icon: TrendingUp, path: '/trends' },
     { label: 'Payment Methods', icon: CreditCard, path: '/payment-methods' },

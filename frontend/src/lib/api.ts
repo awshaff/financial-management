@@ -37,7 +37,9 @@ async function request<T>(
     });
 
     if (!response.ok) {
-        if (response.status === 401) {
+        // Handle 401 Unauthorized
+        // Skip redirect if this was a login attempt to avoid reloading the page
+        if (response.status === 401 && !endpoint.includes('/auth/login')) {
             localStorage.removeItem('auth_token');
             window.location.href = '/login';
         }
@@ -162,7 +164,7 @@ export const dashboard = {
     },
 
     trends: () =>
-        request<{ months: import('@/types').MonthlyTrend[] }>('/trends/monthly'),
+        request<{ months: import('@/types').MonthlyTrend[] }>('/dashboard/trends'),
 };
 
 // Settings API
@@ -177,6 +179,36 @@ const settings = {
         }),
 };
 
+// Income API
+export interface Income {
+    id: string;
+    month: string;
+    amount: number;
+    source: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+const income = {
+    list: () =>
+        request<{ income: Income[] }>('/income'),
+
+    create: (data: { month: string; amount: number; source?: string }) =>
+        request<Income>('/income', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    update: (id: string, data: { amount?: number; source?: string }) =>
+        request<Income>(`/income/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+
+    delete: (id: string) =>
+        request<void>(`/income/${id}`, { method: 'DELETE' }),
+};
+
 // Export default api object
 export const api = {
     auth,
@@ -185,4 +217,5 @@ export const api = {
     paymentMethods,
     dashboard,
     settings,
+    income,
 };

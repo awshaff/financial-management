@@ -94,13 +94,13 @@ router.post('/login', async (req, res) => {
         });
 
         if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'No account found with this email' });
         }
 
         // Verify password
         const valid = await bcrypt.compare(password, user.passwordHash);
         if (!valid) {
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'Incorrect password' });
         }
 
         // Generate JWT (30-day expiry)
