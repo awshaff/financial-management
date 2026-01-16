@@ -81,7 +81,7 @@ export function IncomePage() {
     const openAddDialog = (month?: Date) => {
         setEditingIncome(null);
         setFormData({
-            month: month ? format(startOfMonth(month), 'yyyy-MM-dd') : format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+            month: month ? format(startOfMonth(month), 'yyyy-MM') : format(startOfMonth(new Date()), 'yyyy-MM'),
             amount: '',
             source: 'Salary',
         });
@@ -91,7 +91,7 @@ export function IncomePage() {
     const openEditDialog = (income: Income) => {
         setEditingIncome(income);
         setFormData({
-            month: income.month,
+            month: income.month.substring(0, 7),
             amount: String(income.amount),
             source: income.source || '',
         });
@@ -280,9 +280,9 @@ export function IncomePage() {
                             <Label>Month</Label>
                             <Input
                                 type="month"
-                                value={formData.month.substring(0, 7)}
+                                value={formData.month}
                                 onChange={(e) =>
-                                    setFormData({ ...formData, month: e.target.value + '-01' })
+                                    setFormData({ ...formData, month: e.target.value })
                                 }
                                 disabled={!!editingIncome}
                             />
