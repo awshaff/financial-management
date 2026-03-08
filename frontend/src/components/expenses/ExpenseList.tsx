@@ -235,7 +235,16 @@ export function ExpenseList({ filters = {}, onSortChange, sortBy = 'date', sortO
                                     <TableCell className="text-sm">
                                         {formatDate(expense.date)}
                                     </TableCell>
-                                    <TableCell className="font-medium">{expense.merchant}</TableCell>
+                                    <TableCell className="font-medium">
+                                        <div className="flex items-center gap-1.5">
+                                            {expense.merchant}
+                                            {expense.paymentMode === 'installment' && expense.installmentNumber && expense.installmentMonths && (
+                                                <Badge variant="outline" className="text-xs font-normal">
+                                                    {expense.installmentNumber}/{expense.installmentMonths}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </TableCell>
                                     <TableCell>
                                         <Badge variant="secondary">{expense.category.name}</Badge>
                                     </TableCell>
@@ -309,7 +318,14 @@ export function ExpenseList({ filters = {}, onSortChange, sortBy = 'date', sortO
                                 <div className="flex-1">
                                     <div className="flex items-start justify-between">
                                         <div className="space-y-1">
-                                            <p className="font-medium">{expense.merchant}</p>
+                                            <p className="font-medium">
+                                                {expense.merchant}
+                                                {expense.paymentMode === 'installment' && expense.installmentNumber && expense.installmentMonths && (
+                                                    <Badge variant="outline" className="text-xs font-normal ml-1.5">
+                                                        {expense.installmentNumber}/{expense.installmentMonths}
+                                                    </Badge>
+                                                )}
+                                            </p>
                                             <p className="text-sm text-muted-foreground">
                                                 {formatDate(expense.date)}
                                             </p>

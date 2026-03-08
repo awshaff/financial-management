@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { CreditCard } from 'lucide-react';
+import { CreditCard, CalendarRange } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,19 +14,31 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useCategories } from '@/hooks/useCategories';
 import { usePaymentMethods } from '@/hooks/usePaymentMethods';
 import { useCreateExpense, useUpdateExpense } from '@/hooks/useExpenses';
 import type { Expense } from '@/types';
 import { toast } from 'sonner';
 
-const expenseSchema = z.object({
-    date: z.string().min(1, 'Date is required'),
-    merchant: z.string().min(1, 'Merchant is required').max(255),
-    amount: z.number().min(1, 'Amount must be at least 1'),
-    categoryId: z.string().min(1, 'Category is required'),
-    paymentMethodId: z.string().min(1, 'Payment method is required'),
-});
+const expenseSchema = z
+    .object({
+        date: z.string().min(1, 'Date is required'),
+        merchant: z.string().min(1, 'Merchant is required').max(255),
+        amount: z.number().min(1, 'Amount must be at least 1'),
+        categoryId: z.string().min(1, 'Category is required'),
+        paymentMethodId: z.string().min(1, 'Payment method is required'),
+        paymentMode: z.enum(['lump_sum', 'installment']),
+        installmentMonths: z.number().int().min(2).max(60).optional(),
+    })
+    .refine(
+        (data) =>
+            data.paymentMode === 'lump_sum' || data.installmentMonths !== undefined,
+        {
+            message: 'Number of months is required for installment payments',
+            path: ['installmentMonths'],
+        }
+    );
 
 type ExpenseFormData = z.infer<typeof expenseSchema>;
 
@@ -51,6 +63,7 @@ export function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFormProps) 
     const updateExpense = useUpdateExpense();
 
     const isEditing = !!expense;
+    const isInstallmentExpense = expense?.paymentMode === 'installment';
 
     const {
         register,
@@ -66,11 +79,17 @@ export function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFormProps) 
             amount: expense?.amount || 0,
             categoryId: expense?.category?.id || '',
             paymentMethodId: expense?.paymentMethod?.id || '',
+            paymentMode: 'lump_sum',
+            installmentMonths: undefined,
         },
     });
 
     const paymentMethodId = watch('paymentMethodId');
     const amount = watch('amount');
+    const paymentMode = watch('paymentMode');
+    const installmentMonths = watch('installmentMonths');
+
+    const isInstallmentMode = paymentMode === 'installment';
 
     // Find selected payment method for cashback calculation
     const selectedMethod = paymentMethods?.find((pm) => pm.id === paymentMethodId);
@@ -86,14 +105,33 @@ export function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFormProps) 
             : 0;
     const amountNet = amount > 0 ? amount - cashbackAmount : 0;
 
+    // Installment per-month calculations
+    const perMonthAmount =
+        isInstallmentMode && installmentMonths && amount > 0
+            ? Math.floor(amount / installmentMonths)
+            : 0;
+    const perMonthCashback =
+        isInstallmentMode && installmentMonths && cashbackAmount > 0
+            ? Math.floor(cashbackAmount / installmentMonths)
+            : 0;
+    const perMonthNet = perMonthAmount - perMonthCashback;
+
     const onSubmit = async (data: ExpenseFormData) => {
         try {
             if (isEditing) {
-                await updateExpense.mutateAsync({ id: expense.id, ...data });
+                // Don't send paymentMode/installmentMonths on update
+                const { paymentMode: _pm, installmentMonths: _im, ...updateData } = data;
+                await updateExpense.mutateAsync({ id: expense.id, ...updateData });
                 toast.success('Expense updated successfully');
             } else {
                 await createExpense.mutateAsync(data);
-                toast.success('Expense added successfully');
+                if (data.paymentMode === 'installment') {
+                    toast.success(
+                        `Installment expense created (${data.installmentMonths} months)`
+                    );
+                } else {
+                    toast.success('Expense added successfully');
+                }
             }
             onSuccess?.();
         } catch (error) {
@@ -135,13 +173,21 @@ export function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFormProps) 
 
             {/* Amount */}
             <div className="space-y-2">
-                <Label htmlFor="amount">Amount (₩)</Label>
+                <Label htmlFor="amount">
+                    {isInstallmentMode ? 'Total Amount (₩)' : 'Amount (₩)'}
+                </Label>
                 <Input
                     id="amount"
                     type="number"
                     placeholder="5000"
+                    disabled={isEditing && isInstallmentExpense}
                     {...register('amount', { valueAsNumber: true })}
                 />
+                {isEditing && isInstallmentExpense && (
+                    <p className="text-xs text-muted-foreground">
+                        Amount cannot be changed for installment expenses. Delete and recreate instead.
+                    </p>
+                )}
                 {errors.amount && (
                     <p className="text-sm text-destructive">{errors.amount.message}</p>
                 )}
@@ -200,8 +246,94 @@ export function ExpenseForm({ expense, onSuccess, onCancel }: ExpenseFormProps) 
                 )}
             </div>
 
+            {/* Installment Toggle — only shown in create mode */}
+            {!isEditing && (
+                <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                        <Checkbox
+                            id="installmentToggle"
+                            checked={isInstallmentMode}
+                            onCheckedChange={(checked) => {
+                                if (checked) {
+                                    setValue('paymentMode', 'installment');
+                                } else {
+                                    setValue('paymentMode', 'lump_sum');
+                                    setValue('installmentMonths', undefined);
+                                }
+                            }}
+                        />
+                        <Label
+                            htmlFor="installmentToggle"
+                            className="text-sm font-medium cursor-pointer select-none"
+                        >
+                            Installment Payment
+                        </Label>
+                    </div>
+
+                    {/* Installment Months Input */}
+                    {isInstallmentMode && (
+                        <div className="space-y-2 pl-7">
+                            <Label htmlFor="installmentMonths">Number of Months</Label>
+                            <Input
+                                id="installmentMonths"
+                                type="number"
+                                min={2}
+                                max={60}
+                                placeholder="e.g., 12"
+                                {...register('installmentMonths', { valueAsNumber: true })}
+                            />
+                            {errors.installmentMonths && (
+                                <p className="text-sm text-destructive">
+                                    {errors.installmentMonths.message}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Installment Preview Card */}
+            {isInstallmentMode && installmentMonths && installmentMonths >= 2 && amount > 0 && (
+                <Card className="bg-blue-500/10 border-blue-500/20">
+                    <CardContent className="p-4">
+                        <div className="flex items-center gap-2 text-blue-400 mb-3">
+                            <CalendarRange className="w-5 h-5" />
+                            <span className="font-medium">
+                                {installmentMonths}-month installment plan
+                            </span>
+                        </div>
+                        <div className="space-y-1 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Total Amount:</span>
+                                <span className="tabular-nums">{formatKRW(amount)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Per Month:</span>
+                                <span className="tabular-nums font-semibold">
+                                    {formatKRW(perMonthAmount)}
+                                </span>
+                            </div>
+                            {cashbackAmount > 0 && (
+                                <>
+                                    <div className="flex justify-between text-success">
+                                        <span>Cashback/mo:</span>
+                                        <span className="tabular-nums">
+                                            -{formatKRW(perMonthCashback)}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between font-semibold pt-2 border-t border-border">
+                                        <span>Net/mo:</span>
+                                        <span className="tabular-nums">{formatKRW(perMonthNet)}</span>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Cashback Preview Card - v4.0 Key Feature */}
-            {isCreditCard && cashbackAmount > 0 && (
+            {isCreditCard && cashbackAmount > 0 && !isInstallmentMode && (
                 <Card className="bg-success/10 border-success/20">
                     <CardContent className="p-4">
                         <div className="flex items-center gap-2 text-success mb-3">

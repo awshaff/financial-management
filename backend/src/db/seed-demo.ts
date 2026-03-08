@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'crypto';
 import { expand } from 'dotenv-expand';
 import dotenv from 'dotenv';
 
@@ -149,6 +150,10 @@ async function seedDemo() {
             amountNet: number;
             categoryId: string;
             paymentMethodId: string;
+            paymentMode?: 'lump_sum' | 'installment';
+            installmentGroupId?: string;
+            installmentMonths?: number;
+            installmentNumber?: number;
         }> = [];
 
         // Category and payment method lookup
@@ -233,9 +238,81 @@ async function seedDemo() {
             }
         }
 
+        // Add sample installment expenses
+        console.log('📦 Creating sample installment expenses...');
+        const installmentPurchases = [
+            {
+                merchant: 'Samsung Store',
+                totalAmount: 1200000, // ₩1,200,000 laptop
+                months: 12,
+                categoryName: 'Shopping',
+                pmName: 'Credit Card',
+                daysAgo: 60, // purchased ~2 months ago
+            },
+            {
+                merchant: 'Apple Store',
+                totalAmount: 900000, // ₩900,000 phone
+                months: 6,
+                categoryName: 'Shopping',
+                pmName: 'Premium Card',
+                daysAgo: 30, // purchased ~1 month ago
+            },
+        ];
+
+        for (const purchase of installmentPurchases) {
+            const category = categoryMap.get(purchase.categoryName)!;
+            const paymentMethod = pmMap.get(purchase.pmName)!;
+            const installmentGroupId = crypto.randomUUID();
+
+            // Calculate cashback on full amount
+            let totalCashback = 0;
+            if (paymentMethod.type === 'Credit Card' && paymentMethod.cashbackPercentage) {
+                totalCashback = Math.round(
+                    purchase.totalAmount * (Number(paymentMethod.cashbackPercentage) / 100)
+                );
+            }
+            const totalNet = purchase.totalAmount - totalCashback;
+
+            const perMonthAmount = Math.floor(purchase.totalAmount / purchase.months);
+            const perMonthCashback = Math.floor(totalCashback / purchase.months);
+            const perMonthNet = Math.floor(totalNet / purchase.months);
+
+            const baseDate = new Date();
+            baseDate.setDate(baseDate.getDate() - purchase.daysAgo);
+
+            for (let i = 0; i < purchase.months; i++) {
+                const isLast = i === purchase.months - 1;
+                const installmentDate = new Date(baseDate);
+                installmentDate.setMonth(installmentDate.getMonth() + i);
+                const dateStr = installmentDate.toISOString().split('T')[0];
+
+                expenseData.push({
+                    userId: demoUser.id,
+                    date: dateStr,
+                    merchant: purchase.merchant,
+                    amount: isLast
+                        ? purchase.totalAmount - perMonthAmount * (purchase.months - 1)
+                        : perMonthAmount,
+                    cashbackAmount: isLast
+                        ? totalCashback - perMonthCashback * (purchase.months - 1)
+                        : perMonthCashback,
+                    amountNet: isLast
+                        ? totalNet - perMonthNet * (purchase.months - 1)
+                        : perMonthNet,
+                    categoryId: category.id,
+                    paymentMethodId: paymentMethod.id,
+                    paymentMode: 'installment' as const,
+                    installmentGroupId,
+                    installmentMonths: purchase.months,
+                    installmentNumber: i + 1,
+                });
+            }
+        }
+        console.log(`   ✓ Created ${installmentPurchases.length} installment groups`);
+
         // Bulk insert expenses
         await db.insert(expenses).values(expenseData);
-        console.log(`   ✓ Created ${expenseData.length} expenses`);
+        console.log(`   ✓ Created ${expenseData.length} total expenses`);
 
         // Create income records for past 6 months (to match trends chart)
         console.log('💵 Creating income records...');

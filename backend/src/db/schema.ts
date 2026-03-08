@@ -25,6 +25,11 @@ export const paymentTypeEnum = pgEnum('payment_type', [
     'Bank Transfer',
 ]);
 
+export const paymentModeEnum = pgEnum('payment_mode', [
+    'lump_sum',
+    'installment',
+]);
+
 // ============================================
 // Users Table
 // ============================================
@@ -162,6 +167,15 @@ export const expenses = pgTable(
             .references(() => paymentMethods.id, { onDelete: 'restrict' })
             .notNull(),
 
+        // Installment support (Approach B: N rows per installment group)
+        paymentMode: paymentModeEnum('payment_mode').default('lump_sum').notNull(),
+        // Shared UUID linking all rows of the same installment purchase
+        installmentGroupId: uuid('installment_group_id'),
+        // Total number of installments in the group (e.g. 12)
+        installmentMonths: integer('installment_months'),
+        // This row's position in the group (1-indexed: 1 of 12, 2 of 12, …)
+        installmentNumber: integer('installment_number'),
+
         createdAt: timestamp('created_at').defaultNow().notNull(),
         updatedAt: timestamp('updated_at').defaultNow().notNull(),
     },
@@ -176,6 +190,10 @@ export const expenses = pgTable(
             table.paymentMethodId
         ),
         updatedIdx: index('idx_expenses_updated').on(table.updatedAt),
+        // Index for efficient installment group lookups
+        installmentGroupIdx: index('idx_expenses_installment_group').on(
+            table.installmentGroupId
+        ),
         // CHECK: amount must be non-negative
         amountCheck: check('amount_check', sql`${table.amount} >= 0`),
         // CHECK: cashback_amount must be non-negative
@@ -194,6 +212,16 @@ export const expenses = pgTable(
         cashbackMaxCheck: check(
             'cashback_max_check',
             sql`${table.cashbackAmount} <= ${table.amount} * 0.1`
+        ),
+        // CHECK: installment_months must be between 2 and 60 when set
+        installmentMonthsCheck: check(
+            'installment_months_check',
+            sql`${table.installmentMonths} IS NULL OR (${table.installmentMonths} >= 2 AND ${table.installmentMonths} <= 60)`
+        ),
+        // CHECK: installment_number must be between 1 and installment_months when set
+        installmentNumberCheck: check(
+            'installment_number_check',
+            sql`${table.installmentNumber} IS NULL OR (${table.installmentNumber} >= 1 AND ${table.installmentNumber} <= ${table.installmentMonths})`
         ),
     })
 );

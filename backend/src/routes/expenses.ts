@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { eq, and, gte, lte, desc, sql } from 'drizzle-orm';
+import { addMonths, format } from 'date-fns';
+import crypto from 'crypto';
 
 import { db } from '../db/client.js';
 import { expenses, categories, paymentMethods } from '../db/schema.js';
@@ -12,13 +14,25 @@ const router = Router();
 router.use(authMiddleware);
 
 // Validation schemas
-const createExpenseSchema = z.object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
-    merchant: z.string().min(1, 'Merchant is required').max(255),
-    amount: z.number().int().min(0).max(100000000), // Max ₩100M
-    categoryId: z.string().uuid('Invalid category ID'),
-    paymentMethodId: z.string().uuid('Invalid payment method ID'),
-});
+const createExpenseSchema = z
+    .object({
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
+        merchant: z.string().min(1, 'Merchant is required').max(255),
+        amount: z.number().int().min(0).max(100000000), // Max ₩100M
+        categoryId: z.string().uuid('Invalid category ID'),
+        paymentMethodId: z.string().uuid('Invalid payment method ID'),
+        paymentMode: z.enum(['lump_sum', 'installment']).default('lump_sum'),
+        // Required when paymentMode is 'installment', range 2-60
+        installmentMonths: z.number().int().min(2).max(60).optional(),
+    })
+    .refine(
+        (data) =>
+            data.paymentMode === 'lump_sum' || data.installmentMonths !== undefined,
+        {
+            message: 'installmentMonths is required when paymentMode is "installment"',
+            path: ['installmentMonths'],
+        }
+    );
 
 const updateExpenseSchema = z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -33,6 +47,7 @@ const querySchema = z.object({
     paymentMethodId: z.string().uuid().optional(),
     startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    paymentMode: z.enum(['lump_sum', 'installment']).optional(),
     sortBy: z.enum(['date', 'merchant', 'category', 'payment', 'amount']).default('date'),
     sortOrder: z.enum(['asc', 'desc']).default('desc'),
     page: z.coerce.number().int().min(1).default(1),
@@ -62,6 +77,9 @@ router.get('/', async (req, res) => {
         }
         if (query.endDate) {
             conditions.push(lte(expenses.date, query.endDate));
+        }
+        if (query.paymentMode) {
+            conditions.push(eq(expenses.paymentMode, query.paymentMode));
         }
 
         const whereClause = and(...conditions);
@@ -162,6 +180,8 @@ router.get('/', async (req, res) => {
 /**
  * POST /api/expenses
  * Create expense with SERVER-CALCULATED cashback (never trust client)
+ * Supports lump_sum (default) and installment payment modes.
+ * For installments, creates N individual rows linked by installmentGroupId.
  */
 router.post('/', async (req, res) => {
     try {
@@ -192,35 +212,107 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Invalid payment method' });
         }
 
-        // SERVER calculates cashback (NEVER trust client)
-        let cashbackAmount = 0;
+        // SERVER calculates cashback on the FULL amount (NEVER trust client)
+        let totalCashback = 0;
         if (
             paymentMethod.type === 'Credit Card' &&
             paymentMethod.cashbackPercentage
         ) {
-            cashbackAmount = Math.round(
+            totalCashback = Math.round(
                 data.amount * (Number(paymentMethod.cashbackPercentage) / 100)
             );
         }
 
-        const amountNet = data.amount - cashbackAmount;
+        const totalAmountNet = data.amount - totalCashback;
 
-        // Insert with database-enforced constraint validation
-        const [expense] = await db
-            .insert(expenses)
-            .values({
+        // --- LUMP SUM ---
+        if (data.paymentMode === 'lump_sum') {
+            const [expense] = await db
+                .insert(expenses)
+                .values({
+                    userId,
+                    date: data.date,
+                    merchant: data.merchant,
+                    amount: data.amount,
+                    cashbackAmount: totalCashback,
+                    amountNet: totalAmountNet,
+                    categoryId: data.categoryId,
+                    paymentMethodId: data.paymentMethodId,
+                    paymentMode: 'lump_sum',
+                })
+                .returning();
+
+            return res.status(201).json(expense);
+        }
+
+        // --- INSTALLMENT ---
+        const installmentMonths = data.installmentMonths!;
+        const installmentGroupId = crypto.randomUUID();
+
+        // Divide amount equally; last installment absorbs rounding remainder
+        const perMonthAmount = Math.floor(data.amount / installmentMonths);
+        const perMonthCashback = Math.floor(totalCashback / installmentMonths);
+        const perMonthNet = Math.floor(totalAmountNet / installmentMonths);
+
+        const rows: Array<{
+            userId: string;
+            date: string;
+            merchant: string;
+            amount: number;
+            cashbackAmount: number;
+            amountNet: number;
+            categoryId: string;
+            paymentMethodId: string;
+            paymentMode: 'lump_sum' | 'installment';
+            installmentGroupId: string;
+            installmentMonths: number;
+            installmentNumber: number;
+        }> = [];
+
+        const baseDate = new Date(data.date + 'T00:00:00');
+
+        for (let i = 0; i < installmentMonths; i++) {
+            const isLast = i === installmentMonths - 1;
+            const installmentDate = format(addMonths(baseDate, i), 'yyyy-MM-dd');
+
+            // Last installment absorbs any rounding remainder
+            const amount = isLast
+                ? data.amount - perMonthAmount * (installmentMonths - 1)
+                : perMonthAmount;
+            const cashback = isLast
+                ? totalCashback - perMonthCashback * (installmentMonths - 1)
+                : perMonthCashback;
+            const net = isLast
+                ? totalAmountNet - perMonthNet * (installmentMonths - 1)
+                : perMonthNet;
+
+            rows.push({
                 userId,
-                date: data.date,
+                date: installmentDate,
                 merchant: data.merchant,
-                amount: data.amount,
-                cashbackAmount,
-                amountNet,
+                amount,
+                cashbackAmount: cashback,
+                amountNet: net,
                 categoryId: data.categoryId,
                 paymentMethodId: data.paymentMethodId,
-            })
-            .returning();
+                paymentMode: 'installment',
+                installmentGroupId,
+                installmentMonths,
+                installmentNumber: i + 1,
+            });
+        }
 
-        return res.status(201).json(expense);
+        const inserted = await db.insert(expenses).values(rows).returning();
+
+        return res.status(201).json({
+            installmentGroupId,
+            installmentMonths,
+            totalAmount: data.amount,
+            totalCashback,
+            totalAmountNet,
+            perMonthAmount,
+            installments: inserted,
+        });
     } catch (error) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({
@@ -235,7 +327,8 @@ router.post('/', async (req, res) => {
 
 /**
  * GET /api/expenses/:id
- * Get single expense by ID
+ * Get single expense by ID.
+ * If the expense is part of an installment group, also returns sibling installments.
  */
 router.get('/:id', async (req, res) => {
     try {
@@ -259,7 +352,7 @@ router.get('/:id', async (req, res) => {
         }
 
         const r = result[0];
-        return res.json({
+        const expenseData: Record<string, any> = {
             ...r.expense,
             category: r.category
                 ? { id: r.category.id, name: r.category.name }
@@ -272,7 +365,37 @@ router.get('/:id', async (req, res) => {
                     cashbackPercentage: r.paymentMethod.cashbackPercentage,
                 }
                 : null,
-        });
+        };
+
+        // If installment, include sibling installments for context
+        if (r.expense.installmentGroupId) {
+            const siblings = await db
+                .select()
+                .from(expenses)
+                .where(
+                    and(
+                        eq(expenses.installmentGroupId, r.expense.installmentGroupId),
+                        eq(expenses.userId, userId)
+                    )
+                )
+                .orderBy(sql`${expenses.installmentNumber} ASC`);
+
+            expenseData.installmentGroup = {
+                groupId: r.expense.installmentGroupId,
+                totalMonths: r.expense.installmentMonths,
+                currentNumber: r.expense.installmentNumber,
+                totalAmount: siblings.reduce((sum, s) => sum + s.amount, 0),
+                installments: siblings.map((s) => ({
+                    id: s.id,
+                    date: s.date,
+                    amount: s.amount,
+                    amountNet: s.amountNet,
+                    installmentNumber: s.installmentNumber,
+                })),
+            };
+        }
+
+        return res.json(expenseData);
     } catch (error) {
         console.error('Get expense error:', error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -281,7 +404,9 @@ router.get('/:id', async (req, res) => {
 
 /**
  * PATCH /api/expenses/:id
- * Update expense (recalculates cashback if payment method changes)
+ * Update expense (recalculates cashback if payment method changes).
+ * For installment expenses: updates all rows in the group.
+ * Amount changes are blocked for installment expenses.
  */
 router.patch('/:id', async (req, res) => {
     try {
@@ -296,6 +421,13 @@ router.patch('/:id', async (req, res) => {
 
         if (!existing) {
             return res.status(404).json({ error: 'Expense not found' });
+        }
+
+        // Block amount changes for installment expenses (too complex to recalculate)
+        if (existing.paymentMode === 'installment' && data.amount !== undefined) {
+            return res.status(400).json({
+                error: 'Cannot change amount for installment expenses. Delete and recreate instead.',
+            });
         }
 
         // Determine final values
@@ -328,7 +460,78 @@ router.patch('/:id', async (req, res) => {
             return res.status(400).json({ error: 'Invalid payment method' });
         }
 
-        // Recalculate cashback
+        // --- INSTALLMENT GROUP UPDATE ---
+        // For installment expenses, propagate merchant/category/paymentMethod changes to all rows
+        if (existing.paymentMode === 'installment' && existing.installmentGroupId) {
+            const groupUpdateData: Record<string, any> = {
+                updatedAt: new Date(),
+            };
+
+            if (data.merchant !== undefined) groupUpdateData.merchant = data.merchant;
+            if (data.categoryId !== undefined) groupUpdateData.categoryId = data.categoryId;
+            if (data.paymentMethodId !== undefined) {
+                groupUpdateData.paymentMethodId = data.paymentMethodId;
+
+                // Recalculate cashback for each row in the group
+                const groupRows = await db
+                    .select()
+                    .from(expenses)
+                    .where(
+                        and(
+                            eq(expenses.installmentGroupId, existing.installmentGroupId),
+                            eq(expenses.userId, userId)
+                        )
+                    );
+
+                for (const row of groupRows) {
+                    let cashbackAmount = 0;
+                    if (
+                        paymentMethod.type === 'Credit Card' &&
+                        paymentMethod.cashbackPercentage
+                    ) {
+                        cashbackAmount = Math.round(
+                            row.amount * (Number(paymentMethod.cashbackPercentage) / 100)
+                        );
+                    }
+                    await db
+                        .update(expenses)
+                        .set({
+                            ...groupUpdateData,
+                            cashbackAmount,
+                            amountNet: row.amount - cashbackAmount,
+                        })
+                        .where(eq(expenses.id, row.id));
+                }
+
+                // Return the updated target row
+                const [updated] = await db
+                    .select()
+                    .from(expenses)
+                    .where(eq(expenses.id, id));
+
+                return res.json(updated);
+            }
+
+            // Non-payment-method group update (no cashback recalc needed)
+            await db
+                .update(expenses)
+                .set(groupUpdateData)
+                .where(
+                    and(
+                        eq(expenses.installmentGroupId, existing.installmentGroupId),
+                        eq(expenses.userId, userId)
+                    )
+                );
+
+            const [updated] = await db
+                .select()
+                .from(expenses)
+                .where(eq(expenses.id, id));
+
+            return res.json(updated);
+        }
+
+        // --- LUMP SUM UPDATE (original logic) ---
         let cashbackAmount = 0;
         if (
             paymentMethod.type === 'Credit Card' &&
@@ -341,7 +544,6 @@ router.patch('/:id', async (req, res) => {
 
         const amountNet = finalAmount - cashbackAmount;
 
-        // Build update object
         const updateData: Record<string, any> = {
             amount: finalAmount,
             cashbackAmount,
@@ -376,21 +578,45 @@ router.patch('/:id', async (req, res) => {
 
 /**
  * DELETE /api/expenses/:id
- * Delete an expense
+ * Delete an expense.
+ * For installment expenses: deletes ALL rows in the installment group.
  */
 router.delete('/:id', async (req, res) => {
     try {
         const { userId } = req.user!;
         const { id } = req.params;
 
-        const result = await db
-            .delete(expenses)
-            .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
-            .returning({ id: expenses.id });
+        // Check if this is an installment expense
+        const existing = await db.query.expenses.findFirst({
+            where: and(eq(expenses.id, id), eq(expenses.userId, userId)),
+        });
 
-        if (result.length === 0) {
+        if (!existing) {
             return res.status(404).json({ error: 'Expense not found' });
         }
+
+        // If installment, delete the entire group
+        if (existing.paymentMode === 'installment' && existing.installmentGroupId) {
+            const result = await db
+                .delete(expenses)
+                .where(
+                    and(
+                        eq(expenses.installmentGroupId, existing.installmentGroupId),
+                        eq(expenses.userId, userId)
+                    )
+                )
+                .returning({ id: expenses.id });
+
+            return res.json({
+                deleted: result.length,
+                installmentGroupId: existing.installmentGroupId,
+            });
+        }
+
+        // Lump sum: delete single row
+        await db
+            .delete(expenses)
+            .where(and(eq(expenses.id, id), eq(expenses.userId, userId)));
 
         return res.status(204).send();
     } catch (error) {
@@ -401,7 +627,8 @@ router.delete('/:id', async (req, res) => {
 
 /**
  * POST /api/expenses/bulk-delete
- * Delete multiple expenses at once
+ * Delete multiple expenses at once.
+ * For installment expenses: automatically expands to delete entire groups.
  */
 const bulkDeleteSchema = z.object({
     ids: z.array(z.string().uuid()).min(1).max(100),
@@ -412,16 +639,41 @@ router.post('/bulk-delete', async (req, res) => {
         const { userId } = req.user!;
         const { ids } = bulkDeleteSchema.parse(req.body);
 
-        // Delete expenses one by one to ensure proper ownership check
-        // This is safe for up to 100 items (as limited by schema)
         let deletedCount = 0;
+
+        // Collect installment group IDs that need full-group deletion
+        const processedGroupIds = new Set<string>();
+
         for (const id of ids) {
-            const result = await db
-                .delete(expenses)
-                .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
-                .returning({ id: expenses.id });
-            if (result.length > 0) {
-                deletedCount++;
+            const existing = await db.query.expenses.findFirst({
+                where: and(eq(expenses.id, id), eq(expenses.userId, userId)),
+            });
+
+            if (!existing) continue;
+
+            // If installment and group not yet processed, delete entire group
+            if (
+                existing.paymentMode === 'installment' &&
+                existing.installmentGroupId &&
+                !processedGroupIds.has(existing.installmentGroupId)
+            ) {
+                processedGroupIds.add(existing.installmentGroupId);
+                const result = await db
+                    .delete(expenses)
+                    .where(
+                        and(
+                            eq(expenses.installmentGroupId, existing.installmentGroupId),
+                            eq(expenses.userId, userId)
+                        )
+                    )
+                    .returning({ id: expenses.id });
+                deletedCount += result.length;
+            } else if (existing.paymentMode === 'lump_sum') {
+                const result = await db
+                    .delete(expenses)
+                    .where(and(eq(expenses.id, id), eq(expenses.userId, userId)))
+                    .returning({ id: expenses.id });
+                if (result.length > 0) deletedCount++;
             }
         }
 

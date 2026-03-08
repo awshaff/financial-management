@@ -90,6 +90,7 @@ router.post('/excel', upload.single('file'), async (req, res) => {
             amountNet: number;
             categoryId: string;
             paymentMethodId: string;
+            paymentMode: 'lump_sum';
         }> = [];
         const errors: ImportError[] = [];
 
@@ -187,6 +188,7 @@ router.post('/excel', upload.single('file'), async (req, res) => {
                 amountNet: amount,
                 categoryId: category.id,
                 paymentMethodId: paymentMethod.id,
+                paymentMode: 'lump_sum' as const,
             });
         }
 

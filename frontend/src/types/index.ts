@@ -41,6 +41,10 @@ export interface Expense {
     amountNet: number;
     category: Category;
     paymentMethod: PaymentMethod;
+    paymentMode: 'lump_sum' | 'installment';
+    installmentGroupId: string | null;
+    installmentMonths: number | null;
+    installmentNumber: number | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -51,6 +55,8 @@ export interface CreateExpenseInput {
     amount: number;
     categoryId: string;
     paymentMethodId: string;
+    paymentMode?: 'lump_sum' | 'installment';
+    installmentMonths?: number;
 }
 
 export interface UpdateExpenseInput extends Partial<CreateExpenseInput> {
