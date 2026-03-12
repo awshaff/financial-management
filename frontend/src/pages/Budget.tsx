@@ -42,11 +42,7 @@ export function BudgetPage() {
         setSelectedMonth(prev => addMonths(prev, 1));
     };
 
-    const isCurrentMonth = useMemo(() => {
-        const now = new Date();
-        return selectedMonth.getMonth() === now.getMonth() &&
-            selectedMonth.getFullYear() === now.getFullYear();
-    }, [selectedMonth]);
+
 
     if (isLoading) {
         return (
@@ -89,7 +85,6 @@ export function BudgetPage() {
                             size="sm"
                             className="h-7 w-7 p-0"
                             onClick={handleNextMonth}
-                            disabled={isCurrentMonth}
                         >
                             <ChevronRight className="w-4 h-4" />
                         </Button>

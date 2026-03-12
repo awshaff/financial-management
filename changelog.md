@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-03-12] — Allow Future Billing Cycle Navigation
+
+### Changed
+- **Dashboard** and **Budget** pages now allow navigating to upcoming billing cycles (removed current-month restriction on the forward arrow)
+- When no data exists for the selected period, pages display zeroed-out stats and empty budget progress — no error or blank screen
+
 ## [2026-03-08] — Frontend: Installment Payment Mode UI
 
 ### Added
